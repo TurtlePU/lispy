@@ -101,10 +101,10 @@ mod builtins {
     }
 
     pub fn sub(_: EnvObj, args: Vec<AST>) -> EvalResult {
-        binary_or_unary(|x: AST, y, _| Ok(AST::Number(match y {
-            Some(y) => x.number()? - y.number()?,
-            None => -x.number()?,
-        })))(args)
+        binary_or_unary(|x: i128, y| Ok(match y {
+            Some(y) => x - y,
+            None => -x,
+        }))(args)
     }
 
     pub fn mul(_: EnvObj, args: Vec<AST>) -> EvalResult {
@@ -112,8 +112,8 @@ mod builtins {
     }
 
     pub fn div(_: EnvObj, args: Vec<AST>) -> EvalResult {
-        binary(|x: AST, y| match x.number()?.checked_div(y.number()?) {
-            Some(z) => Ok(AST::Number(z)),
+        binary(|x: i128, y| match x.checked_div(y) {
+            Some(z) => Ok(z),
             None => Err(EvalError::Message("div by zero")),
         })(args)
     }
@@ -126,19 +126,19 @@ mod builtins {
     }
 
     pub fn head(_: EnvObj, args: Vec<AST>) -> EvalResult {
-        unary(|x: AST| x.qexpr()?.head().map(AST::QExpr))(args)
+        unary(QExpr::head)(args)
     }
 
     pub fn tail(_: EnvObj, args: Vec<AST>) -> EvalResult {
-        unary(|x: AST| x.qexpr()?.tail().map(AST::QExpr))(args)
+        unary(QExpr::tail)(args)
     }
 
     pub fn join(_: EnvObj, args: Vec<AST>) -> EvalResult {
-        Ok(AST::QExpr(QExpr::from(sequence(args, AST::qexpr)?.concat())))
+        oftype(|xs: Vec<QExpr>| Ok(QExpr::from(xs.concat())))(args)
     }
 
     pub fn eval(env: EnvObj, args: Vec<AST>) -> EvalResult {
-        unary(|x: AST| x.qexpr()?.eval(env))(args)
+        unary(|x: QExpr| x.eval(env))(args)
     }
 
     pub fn def(env: EnvObj, args: Vec<AST>) -> EvalResult {
@@ -166,9 +166,7 @@ mod builtins {
     }
 
     pub fn lambda(_: EnvObj, args: Vec<AST>) -> EvalResult {
-        binary(|defs: AST, body| {
-            Ok(Lambda::new(defs.qexpr()?.symbols()?, body.qexpr()?))
-        })(args)
+        binary(|defs: QExpr, body| Ok(Lambda::new(defs.symbols()?, body)))(args)
     }
 
     pub fn exit(_: EnvObj, _: Vec<AST>) -> EvalResult {
