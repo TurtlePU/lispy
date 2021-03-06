@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, iter::FromIterator};
 use super::{ast::AST, env::EnvObj, eval_error::*, transformers::sequence};
 
 #[derive(Clone)]
@@ -7,6 +7,12 @@ pub struct QExpr(Vec<AST>);
 impl From<Vec<AST>> for QExpr {
     fn from(vec: Vec<AST>) -> Self {
         Self(vec)
+    }
+}
+
+impl FromIterator<AST> for QExpr {
+    fn from_iter<I>(iter: I) -> Self where I: IntoIterator<Item = AST> {
+        Self::from(iter.into_iter().collect::<Vec<_>>())
     }
 }
 

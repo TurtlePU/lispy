@@ -31,12 +31,26 @@ impl ToString for Function {
 pub struct Lambda {
     context: Context,
     params: Vec<String>,
+    vararg: Option<String>,
     body: QExpr,
 }
 
 impl Lambda {
-    pub fn new(params: Vec<String>, body: QExpr) -> AST {
-        Self { context: Context::default(), params, body } .ast()
+    pub fn new(mut params: Vec<String>, body: QExpr) -> EvalResult {
+        let tail_pos = params.iter()
+            .position(|x| x == "&")
+            .unwrap_or(params.len());
+        let mut tail = params.drain(tail_pos..).skip(1);
+        let vararg = tail.next();
+        if tail.len() > 0 {
+            Err(EvalError::Message("more than one param after &"))
+        } else {
+            std::mem::drop(tail);
+            Ok(Self {
+                context: Context::default(),
+                params, vararg, body,
+            } .ast())
+        }
     }
 
     fn ast(self) -> AST {
@@ -46,12 +60,12 @@ impl Lambda {
     fn call(&self, env: EnvObj, args: IntoIter<AST>) -> EvalResult {
         let (expected, given) = (self.params.len(), args.len());
         use std::cmp::Ordering::*;
-        match given.cmp(&expected) {
-            Less => Ok(self.curry(args).ast()),
-            Equal => self.apply(env, args),
-            Greater => Err(EvalError::ArgsMismatch(
-                Unexpected { expected, given }
-            )),
+        match (given.cmp(&expected), &self.vararg) {
+            (Less, _) => Ok(self.curry(args).ast()),
+            (Greater, None) => Err(EvalError::ArgsMismatch(Unexpected {
+                expected, given
+            })),
+            _ => self.apply(env, args),
         }
     }
 
@@ -60,15 +74,26 @@ impl Lambda {
         Self {
             context: self.extend(args),
             params: Vec::from(&self.params[n..]),
+            vararg: self.vararg.clone(),
             body: self.body.clone(),
         }
     }
 
     fn apply(&self, env: EnvObj, args: IntoIter<AST>) -> EvalResult {
-        self.body.clone().eval(&mut self.extend(args).scope(env))
+        let context = match &self.vararg {
+            Some(vararg) => {
+                let mut args: Vec<_> = args.collect();
+                let tail = args.drain(self.params.len()..).collect();
+                let mut context = self.extend(args);
+                context.0.insert(vararg.clone(), AST::QExpr(tail));
+                context
+            },
+            None => self.extend(args)
+        };
+        self.body.clone().eval(&mut context.scope(env))
     }
 
-    fn extend(&self, args: IntoIter<AST>) -> Context {
+    fn extend(&self, args: impl IntoIterator<Item = AST>) -> Context {
         self.context.extend(&self.params, args)
     }
 }
@@ -83,7 +108,9 @@ impl ToString for Lambda {
 struct Context(Bindings);
 
 impl Context {
-    fn extend(&self, params: &Vec<String>, args: IntoIter<AST>) -> Self {
+    fn extend(&self,
+              params: &Vec<String>,
+              args: impl IntoIterator<Item = AST>) -> Self {
         let mut bindings = self.0.clone();
         bindings.extend(params.iter().cloned().zip(args));
         Self(bindings)

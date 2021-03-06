@@ -166,7 +166,7 @@ mod builtins {
     }
 
     pub fn lambda(_: EnvObj, args: Vec<AST>) -> EvalResult {
-        binary(|defs: QExpr, body| Ok(Lambda::new(defs.symbols()?, body)))(args)
+        binary(|defs: QExpr, body| Lambda::new(defs.symbols()?, body))(args)
     }
 
     pub fn exit(_: EnvObj, _: Vec<AST>) -> EvalResult {
