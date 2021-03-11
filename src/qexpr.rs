@@ -1,7 +1,7 @@
 use std::{borrow::Borrow, iter::FromIterator};
 use super::{ast::AST, env::EnvObj, eval_error::*, transformers::sequence};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct QExpr(Vec<AST>);
 
 impl From<Vec<AST>> for QExpr {

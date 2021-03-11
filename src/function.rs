@@ -1,4 +1,5 @@
 use std::vec::IntoIter;
+use std::fmt;
 use super::{env::*, ast::AST, eval_error::*, qexpr::QExpr};
 
 pub type Builtin = fn(EnvObj, Vec<AST>) -> EvalResult;
@@ -18,6 +19,26 @@ impl Function {
     }
 }
 
+impl fmt::Debug for Function {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Function::Builtin(_) => fmt.write_str("<function>"),
+            Function::Lambda(f) => f.fmt(fmt),
+        }
+    }
+}
+
+impl PartialEq for Function {
+    fn eq(&self, other: &Function) -> bool {
+        match (self, other) {
+            (Function::Builtin(x), Function::Builtin(y)) =>
+                x as *const Builtin == y as *const Builtin,
+            (Function::Lambda(x), Function::Lambda(y)) => x == y,
+            _ => false,
+        }
+    }
+}
+
 impl ToString for Function {
     fn to_string(&self) -> String {
         match self {
@@ -27,7 +48,7 @@ impl ToString for Function {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Lambda {
     context: Context,
     params: Vec<String>,
@@ -104,7 +125,7 @@ impl ToString for Lambda {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 struct Context(Bindings);
 
 impl Context {

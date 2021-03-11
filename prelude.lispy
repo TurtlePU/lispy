@@ -1,0 +1,45 @@
+def {nil} {}
+def {true} 1
+def {false} 0
+
+def {fun} (\ {args body} {def (head args) (\ (tail args) body)})
+
+fun {unpack fn list} {eval (join (list f) l)}
+fun {pack fn & args} {fn args}
+
+def {curry} unpack
+def {uncurry} pack
+
+fun {do & list} {if (== list nil) {nil} {last list}}
+
+fun {let b} {(\ {_} b) ()}
+
+fun {flip f a b} {f b a}
+fun {ghost & xs} {eval xs}
+fun {comp f g x} {f (g x)}
+
+fun { ! x } { if x { 0 } { 1 } }
+fun { & x y } { if x { y } { 0 } }
+fun { | x y } { (! ( & (! x) (! y) )) }
+
+fun {!= x y} {!(== x y)}
+fun {> x y} {< y x}
+fun {<= x y} {!(> x y)}
+fun {>= x y} {!(< x y)}
+
+fun {fst list} {eval (head list)}
+fun {cons x l} {join (list x) l}
+fun {push l x} {join l (list x)}
+
+fun {fold fn z l} {if (== l nil) {z} {fn (fst l) (fold fn z (tail l))} }
+fun {map f l} {fold (\{x l} {cons (f x) l}) nil l}
+
+def {sum} (fold + 0)
+def {any} (fold | false)
+def {all} (fold & true)
+
+fun {const x n} {x}
+
+def {len} (comp sum (map (const 1)))
+
+fun {elem x l} {any (map (\ {y} (push {== y} x)) l)}

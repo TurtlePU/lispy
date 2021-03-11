@@ -5,7 +5,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     combinator::{all_consuming, into, map, map_res, opt, recognize, value},
-    character::complete::{alphanumeric1, digit1, one_of, multispace0},
+    character::complete::*,
     error::Error,
     multi::{many0, many1},
     sequence::{delimited, preceded},
@@ -24,14 +24,15 @@ fn parse_many(string: &str) -> MyResult<Vec<AST>> {
 
 fn parse_ast(string: &str) -> MyResult {
     delimited(
-        multispace0,
+        spaces,
         alt((
             map(parse_number, AST::Number),
             map(parse_symbol, AST::Symbol),
+            map(parse_string, AST::Literal),
             map(parse_sexpr, AST::SExpr),
             map(parse_qexpr, AST::QExpr),
         )),
-        multispace0
+        spaces
     )(string)
 }
 
@@ -43,9 +44,21 @@ fn parse_number(string: &str) -> MyResult<i128> {
 fn parse_symbol(string: &str) -> MyResult<String> {
     let pattern = many1(alt((
         value((), alphanumeric1),
-        value((), one_of("_+-*/\\=<>!&")),
+        value((), one_of("_+-*/\\=<>!&|")),
     )));
     map(recognize(pattern), String::from)(string)
+}
+
+fn parse_string(string: &str) -> MyResult<String> {
+    let pattern = many1(alt((
+        value('\n', tag("\\n")),
+        value('\r', tag("\\r")),
+        value('\t', tag("\\r")),
+        preceded(tag("\\"), anychar),
+        none_of("\""),
+    )));
+    delimited(tag("\""), map(pattern, |x| x.into_iter().collect()), tag("\""))
+        (string)
 }
 
 fn parse_sexpr(string: &str) -> MyResult<Vec<AST>> {
@@ -54,4 +67,12 @@ fn parse_sexpr(string: &str) -> MyResult<Vec<AST>> {
 
 fn parse_qexpr(string: &str) -> MyResult<QExpr> {
     into(delimited(tag("{"), parse_many, tag("}")))(string)
+}
+
+fn spaces(string: &str) -> MyResult<Option<&str>> {
+    delimited(multispace0, opt(comments), multispace0)(string)
+}
+
+fn comments(string: &str) -> MyResult<&str> {
+    preceded(tag(";"), not_line_ending)(string)
 }

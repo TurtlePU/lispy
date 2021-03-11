@@ -7,10 +7,11 @@ use super::{
     transformers::sequence,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AST {
     Number(i128),
     Symbol(String),
+    Literal(String),
     SExpr(Vec<AST>),
     QExpr(QExpr),
     Function(Function),
@@ -54,8 +55,8 @@ impl AST {
     pub fn eval(self, env: EnvObj) -> EvalResult {
         match self {
             AST::Symbol(var) => env.get(var),
-            AST::SExpr(expr) if expr.len() == 1 =>
-                expr.into_iter().next().unwrap().eval(env),
+            AST::SExpr(mut expr) if expr.len() == 1 =>
+                expr.pop().unwrap().eval(env),
             AST::SExpr(exprs) if !exprs.is_empty() => {
                 let mut exprs = sequence(exprs, |x| x.eval(env))?.into_iter();
                 let fun = exprs.next().unwrap().function()?;
@@ -69,6 +70,7 @@ impl AST {
         match self {
             AST::Number(_) => "number",
             AST::Symbol(_) => "symbol",
+            AST::Literal(_) => "string",
             AST::SExpr(_) => "S-expr",
             AST::QExpr(_) => "Q-expr",
             AST::Function(_) => "function",
@@ -96,6 +98,13 @@ impl AST {
         }
     }
 
+    pub fn literal(self) -> EvalResult<String> {
+        match self {
+            AST::Literal(lit) => Ok(lit),
+            ast => Err(EvalError::NotA("string", ast)),
+        }
+    }
+
     fn function(self) -> EvalResult<Function> {
         match self {
             AST::Function(fun) => Ok(fun),
@@ -109,9 +118,18 @@ impl ToString for AST {
         match self {
             AST::Number(num) => num.to_string(),
             AST::Symbol(sym) => sym.clone(),
+            AST::Literal(string) => format!("\"{}\"", escaped(string)),
             AST::SExpr(asts) => pprint("(", asts, ")"),
             AST::QExpr(asts) => asts.to_string(),
             AST::Function(fun) => fun.to_string(),
         }
     }
+}
+
+fn escaped(string: &String) -> String {
+    string
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
+        .replace("\r", "\\r")
+        .replace("\"", "\\\"")
 }

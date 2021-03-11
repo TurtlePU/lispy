@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use std::path::Path;
+use std::fs;
+use super::parser::parse;
 use super::{ast::*, function::*, eval_error::*};
 
 pub type EnvObj<'a> = &'a mut dyn Env;
@@ -7,6 +10,19 @@ pub trait Env {
     fn get(&self, key: String) -> EvalResult<AST>;
     fn define(&mut self, bindings: BindingsVec);
     fn assign(&mut self, bindings: BindingsVec);
+}
+
+pub fn load<P>(env: EnvObj, file: P) -> EvalResult where P: AsRef<Path> {
+    let content = fs::read_to_string(file)?;
+    for line in content.lines() {
+        match parse(line) {
+            Ok(expr) => if let Err(err) = expr.eval(env) {
+                println!("{}", err.to_string());
+            },
+            Err(err) => println!("{}", err),
+        }
+    }
+    Ok(AST::default())
 }
 
 pub type Bindings = HashMap<String, AST>;
@@ -26,12 +42,18 @@ impl Default for Global {
             ("/", div),
             ("\\", lambda),
             ("=", assign),
+            ("<", less),
+            ("==", eq),
             ("list", list),
             ("head", head),
             ("tail", tail),
             ("join", join),
             ("eval", eval),
             ("def", def),
+            ("if", iff),
+            ("load", load),
+            ("print", print),
+            ("error", error),
             ("exit", exit),
         ];
         let bindings = bindings.into_iter().map(|(s, f)| {
@@ -171,5 +193,46 @@ mod builtins {
 
     pub fn exit(_: EnvObj, _: Vec<AST>) -> EvalResult {
         Err(EvalError::Exit)
+    }
+
+    pub fn less(_: EnvObj, args: Vec<AST>) -> EvalResult {
+        binary(|x: i128, y| Ok(bool_int(x < y)))(args)
+    }
+
+    pub fn eq(_: EnvObj, args: Vec<AST>) -> EvalResult {
+        binary(|x: AST, y| Ok(AST::Number(bool_int(x == y))))(args)
+    }
+
+    pub fn iff(env: EnvObj, args: Vec<AST>) -> EvalResult {
+        let mut args = args.into_iter();
+        let num = args.next().ok_or(NO_ARGS)?.number()?;
+        let left = args.next().ok_or(1.expected(3))?.qexpr()?;
+        let right = args.next().ok_or(2.expected(3))?.qexpr()?;
+        if num == 0 {
+            right.eval(env)
+        } else {
+            left.eval(env)
+        }
+    }
+
+    pub fn load(env: EnvObj, args: Vec<AST>) -> EvalResult {
+        unary(|file: AST| super::load(env, file.literal()?))(args)
+    }
+
+    pub fn print(_: EnvObj, args: Vec<AST>) -> EvalResult {
+        let joined = args.iter()
+            .map(AST::to_string).collect::<Vec<_>>().join(" ");
+        println!("{}", joined);
+        Ok(AST::default())
+    }
+
+    pub fn error(_: EnvObj, args: Vec<AST>) -> EvalResult {
+        unary(|err: AST| -> EvalResult {
+            Err(EvalError::UserDefined(err.literal()?))
+        })(args)
+    }
+
+    fn bool_int(x: bool) -> i128 {
+        if x { 1 } else { 0 }
     }
 }
